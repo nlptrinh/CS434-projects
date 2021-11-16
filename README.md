@@ -16,7 +16,7 @@ White team:
 | Dec. 2nd week | Project Presentation | <ul><li>Prepare the presentation slide</li></ul> ||
 
 
-## Plan 
+## Revised Plan 
 
 | Date | Subject | Todo |
 |---|---|---|
