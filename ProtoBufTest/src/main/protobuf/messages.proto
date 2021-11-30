@@ -2,6 +2,7 @@ syntax = "proto2";
 
 package scala.protos;
 
+
 option java_multiple_files = true;
 
 message Data {
@@ -14,3 +15,14 @@ message DataSet{
 }
 
 
+service Greeter {
+    rpc sendData (DataRequest) returns (DataReply) {}
+}
+
+message DataRequest {
+    required DataSet dataSet = 1;
+}
+
+message DataReply {
+    required string reply = 1;
+}

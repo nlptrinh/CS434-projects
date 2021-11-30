@@ -1,8 +1,7 @@
 package worker
 
 import scala.protos.messages._
-import java.io._
-import java.net._
+import io.grpc._
 import scala.io.Source
 
 object worker {
@@ -20,13 +19,14 @@ object worker {
     val lines = Source.fromFile(filename).getLines.toList
     val sortedData = lines.map(stringToData).sortWith(dataLessThan)
     val dataset = DataSet().addAllData(sortedData)
-    val s = new Socket("localhost", 6666)
-    println(s.getPort)
-    val dos = new DataOutputStream(s.getOutputStream)
-    dataset.writeTo(dos)
-    dos.flush
-    dos.close
-    s.close
+
+    val channelBuilder = ManagedChannelBuilder.forAddress("localhost", 4444)
+    channelBuilder.usePlaintext
+    val channel = channelBuilder.build
+    val request = DataRequest(dataset)
+    val blockingStub = GreeterGrpc.blockingStub(channel)
+    val reply:DataReply = blockingStub.sendData(request)
+    println(reply.reply)
   }
 
 }
