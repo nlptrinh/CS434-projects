@@ -1,0 +1,16 @@
+syntax = "proto2";
+
+package scala.protos;
+
+option java_multiple_files = true;
+
+message Data {
+    required string key = 1;
+    required string value = 2;
+}
+
+message DataSet{
+    repeated Data data = 1;
+}
+
+

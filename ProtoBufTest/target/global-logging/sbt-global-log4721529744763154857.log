@@ -1,0 +1,8 @@
+[0m[[0m[0mdebug[0m] [0m[0m> Exec(ggamer, Some(833cb096-98c2-4070-8840-96600789b04a), Some(CommandSource(console0)))[0m
+[0m[[0m[31merror[0m] [0m[0mNot a valid command: ggamer[0m
+[0m[[0m[31merror[0m] [0m[0mNot a valid project ID: ggamer[0m
+[0m[[0m[31merror[0m] [0m[0mExpected ':'[0m
+[0m[[0m[31merror[0m] [0m[0mNot a valid key: ggamer (similar: name, csrLogger, aggregate)[0m
+[0m[[0m[31merror[0m] [0m[0mggamer[0m
+[0m[[0m[31merror[0m] [0m[0m      ^[0m
+[0m[[0m[0mdebug[0m] [0m[0m> Exec(shell, None, None)[0m
