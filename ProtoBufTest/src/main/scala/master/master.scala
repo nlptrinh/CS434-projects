@@ -13,7 +13,10 @@ object master {
     println(s.getInetAddress)
     val dis = new DataInputStream(s.getInputStream)
     val ds = DataSet.parseFrom(dis)
-    println(ds.toProtoString)
+    val outputFile = new File("sortedPartition")
+    val printWriter = new PrintWriter(outputFile)
+    ds.data.foreach(x => printWriter.write(x.key + " " + x.value + "\n"))
+    printWriter.close()
     ss.close
   }
 

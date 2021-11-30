@@ -20,17 +20,13 @@ object worker {
     val lines = Source.fromFile(filename).getLines.toList
     val sortedData = lines.map(stringToData).sortWith(dataLessThan)
     val dataset = DataSet().addAllData(sortedData)
-    println(dataset.toProtoString)
-
     val s = new Socket("localhost", 6666)
-    println(s.getInetAddress)
     println(s.getPort)
     val dos = new DataOutputStream(s.getOutputStream)
     dataset.writeTo(dos)
     dos.flush
     dos.close
     s.close
-
   }
 
 }
