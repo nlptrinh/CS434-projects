@@ -5,6 +5,7 @@ import io.grpc._
 import scala.io.Source
 
 object worker {
+
   def stringToData(str:String):Data = {
     val dataWords = str.split(" ", 2)
     Data(key = dataWords(0), value = dataWords(1))
@@ -22,8 +23,10 @@ object worker {
 
     val channelBuilder = ManagedChannelBuilder.forAddress("localhost", 4444)
     channelBuilder.usePlaintext
+
     val channel = channelBuilder.build
     val request = DataRequest(dataset)
+
     val blockingStub = GreeterGrpc.blockingStub(channel)
     val reply:DataReply = blockingStub.sendData(request)
     println(reply.reply)

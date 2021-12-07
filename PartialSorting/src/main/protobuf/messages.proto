@@ -1,0 +1,61 @@
+syntax = "proto2";
+
+package scala.protos;
+
+
+option java_multiple_files = true;
+
+message Data {
+    required string key = 1;
+    required string value = 2;
+}
+
+message DataSet{
+    repeated Data data = 1;
+}
+
+message DataPackage{
+    repeated DataSet dataSets = 1;
+}
+
+service Greeter {
+    rpc sendData (DataRequest) returns (DataReply) {}
+}
+
+service WorkerService {
+    rpc sendData (DataPackage) returns (DataReply) {}
+}
+
+service MasterService {
+    rpc introduction (ClientInfo) returns (KeyRangeList) {}
+}
+
+
+message BlockKeyRanges {
+   repeated string range = 1;
+}
+
+message MachineKeyRange {
+    required ClientInfo clientInfo = 1;
+    repeated string blockKeyRanges = 2;
+}
+
+message KeyRangeList {
+    repeated MachineKeyRange keyRanges = 1;
+}
+
+
+message ClientInfo {
+    required string ip = 1;
+    required int32 port = 2;
+    required int32 partitions = 3;
+}
+
+
+message DataRequest {
+    required DataSet dataSet = 1;
+}
+
+message DataReply {
+    required string reply = 1;
+}
