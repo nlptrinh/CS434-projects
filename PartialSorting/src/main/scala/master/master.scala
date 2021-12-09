@@ -1,6 +1,7 @@
 package master
 
 import io.grpc.ServerBuilder
+import types.PromiseQueue
 
 import java.net.InetAddress
 import scala.annotation.tailrec
@@ -11,11 +12,13 @@ import scala.language.postfixOps
 
 object master {
 
+
   def main(args: Array[String]): Unit = {
     val noOfClients = args(0).toInt
     val server = new MasterServer(noOfClients)
     server.start
     println(server.getAddress)
+    server.getAndSendNumberOfBlocks
     val clientInfoList = server.getClientInfo
     val noOfBlocks = clientInfoList.foldRight(0)((info, counter) => info.partitions + counter)
     val keyRanges = makeMachineKeyRanges(clientInfoList, noOfBlocks, KeyRangeList(), 0)
@@ -72,17 +75,22 @@ object master {
     def blockUntilShutdown = server.awaitTermination
 
     def getAddress() = InetAddress.getLocalHost + ":" + server.getPort
+    def getAndSendNumberOfBlocks = service.getAndSendNumberOfBlocks
 
   }
 
   class MasterServiceImpl(val noOfClients:Int) extends MasterServiceGrpc.MasterService {
 
     val keyRangesPromise = Promise[KeyRangeList]
-    val clientInfoPromises = List.fill(noOfClients)(Promise[ClientInfo])
+    //val clientInfoPromises = List.fill(noOfClients)(Promise[ClientInfo])
+    val clientInfoPromises = new PromiseQueue[ClientInfo](noOfClients)
+    val numberOfBlocksPromise = Promise[NumberOfBlocks]
+    val clientBlocksNumberPromises = new PromiseQueue[Int](noOfClients)
 
     override def introduction(request: ClientInfo): Future[KeyRangeList] = {
       println("introduction")
-      successAddressPromise(request, clientInfoPromises)
+      clientInfoPromises.success(request)
+      //successAddressPromise(request, clientInfoPromises)
       keyRangesPromise.future
     }
 
@@ -92,10 +100,24 @@ object master {
 
     def getClientInfo = {
       println("getting client info")
-      clientInfoPromises.map(promise => Await.result(promise.future, Duration.Inf))
+      clientInfoPromises.waitForQueue
+      //clientInfoPromises.map(promise => Await.result(promise.future, Duration.Inf))
     }
 
     def sendKeyRanges(keyRangeList: KeyRangeList) = keyRangesPromise success keyRangeList
+
+    def getAndSendNumberOfBlocks = {
+      println("getting blocks count")
+      val listOfBlockCounts = clientBlocksNumberPromises.waitForQueue
+      sendTotalNumberOfBlocks(listOfBlockCounts.foldRight(0)((x, result) => result + x))
+    }
+
+    def sendTotalNumberOfBlocks (amount:Int) = numberOfBlocksPromise success NumberOfBlocks(amount)
+
+    override def numberOfBlocksRequest(request: NumberOfBlocks): Future[NumberOfBlocks] = {
+      clientBlocksNumberPromises.success(request.value)
+      numberOfBlocksPromise.future
+    }
   }
 
 }

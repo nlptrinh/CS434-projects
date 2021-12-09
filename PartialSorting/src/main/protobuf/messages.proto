@@ -27,6 +27,7 @@ service WorkerService {
 }
 
 service MasterService {
+    rpc numberOfBlocksRequest (NumberOfBlocks) returns (NumberOfBlocks) {}
     rpc introduction (ClientInfo) returns (KeyRangeList) {}
 }
 
@@ -58,4 +59,8 @@ message DataRequest {
 
 message DataReply {
     required string reply = 1;
+}
+
+message NumberOfBlocks {
+    required int32 value = 1;
 }

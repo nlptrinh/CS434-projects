@@ -1,20 +1,18 @@
 package worker
 
 import io.grpc.{ManagedChannelBuilder, ServerBuilder}
-import javafx.concurrent.Worker
-import master.master.MasterServiceImpl
+import types.PromiseQueue
 
-import java.io.File
+import java.io.{BufferedWriter, File, FileWriter}
 import java.net.InetAddress
 import scala.concurrent._
 import ExecutionContext.Implicits.global
+import scala.annotation.tailrec
 import scala.io.Source
 import scala.protos.messages._
 
 
 object worker {
-
-  type PromiseQueue[T] = List[Promise[T]]
 
   def main(args: Array[String]): Unit = {
     val argsList = args.toList
@@ -22,18 +20,45 @@ object worker {
     val inputDirs = getDirectoriesFromArgs(argsList.tail, "-I")
     val outputDir = getDirectoriesFromArgs(argsList.tail, "-O").last
     val inputBlocks = blocksFromDirs(inputDirs)
-    val totalBlocksCount = inputBlocks.foldRight(0)((files, counter) => files.size + counter)
-
-    val workerServer = makeWorkerServer()
-    workerServer.start
+    val thisBlocksCount = inputBlocks.foldRight(0)((files, counter) => files.size + counter)
 
     val masterBlockingStub = getMasterBlockingStub(serverAddress)
-    val clientInfo = ClientInfo(outputDir, workerServer.getPort, totalBlocksCount)
+    val totalBlocksCount = masterBlockingStub.numberOfBlocksRequest(NumberOfBlocks(thisBlocksCount))
+
+    val receivedDataQueues = List.fill(thisBlocksCount)(new PromiseQueue[DataSet](totalBlocksCount.value))
+    val workerServer = makeWorkerServer(receivedDataQueues)
+    workerServer.start
+
+    val clientInfo = ClientInfo(outputDir, workerServer.getPort, thisBlocksCount)
     val keyRanges = masterBlockingStub.introduction(clientInfo)
 
+    startThreads(inputBlocks.flatten, keyRanges, receivedDataQueues, 0, outputDir)
+    workerServer.awaitTermination()
+  }
 
-    inputBlocks.flatten.foreach(file => partitionAndSample(file, keyRanges))
+  @tailrec
+  def startThreads(fileList: List[File], keyRangeList: KeyRangeList, dataQueues:List[PromiseQueue[DataSet]], number:Int
+                  ,outPutFile: String):Unit= {
+    if (fileList != Nil) {
+      partitionAndSample(fileList.head, keyRangeList, dataQueues.head, number, outPutFile)
+      startThreads(fileList.tail, keyRangeList, dataQueues.tail, number + 1, outPutFile)
+    }
+  }
 
+  def partitionAndSample(file: File, keyRangeList: KeyRangeList, promiseQueue:PromiseQueue[DataSet],
+                          number:Int, outPutFile:String) = Future {
+    val sortedData = getSortedDataFromFile(file)
+    val dataPacks = partition(sortedData, keyRangeList.keyRanges.toList, List())
+    dataPacks.foreach(sendPackage(_))
+    val dataSets = promiseQueue.waitForQueue
+    val combinedData = dataSets.foldRight(List[Data]())((dataset, combinedList)=>combinedList:::dataset.data.toList)
+    println(number)
+    println(combinedData)
+    val outFile = new File(outPutFile + "/partition" + "." + number)
+    val bw = new BufferedWriter(new FileWriter(outFile))
+    combinedData.sortWith(dataLessThan).foreach(data => bw.write(data.key +" " + data.value + "\n"))
+    bw.close()
+    println(number + " done")
   }
 
   def getSortedDataFromFile(file: File) = {
@@ -49,9 +74,11 @@ object worker {
   def dataLessThan(d1:Data, d2:Data) = if (d1.key < d2.key) true else false
 
 
+  @tailrec
   def partition(sortedData: List[Data], keyRangeList: List[MachineKeyRange], result:List[(List[DataSet], ClientInfo)]):
                 List[(List[DataSet], ClientInfo)] = {
 
+    @tailrec
     def partitionForClient(data: List[Data], blockKeyRanges: List[String], result:List[DataSet]):
                 (List[DataSet], List[Data]) = {
       if(blockKeyRanges == Nil) (result, data)
@@ -71,12 +98,6 @@ object worker {
   }
 
 
-  def partitionAndSample(file: File, keyRangeList: KeyRangeList) = Future {
-    val sortedData = getSortedDataFromFile(file)
-    val dataPacks = partition(sortedData, keyRangeList.keyRanges.toList, List())
-    dataPacks.foreach(sendPackage(_))
-
-  }
 
   def sendPackage(packAndClientInfo: (List[DataSet], ClientInfo)) = {
     val dataPackage = DataPackage(packAndClientInfo._1)
@@ -100,11 +121,12 @@ object worker {
         ("fail", -1)
     }
   }
-
+  @tailrec
   def getDirectoriesFromArgs(argsList: List[String], argName:String):List[String] = {
     if(argsList == Nil) {
       failWithMessage("Missing argument '" + argName + "'+ folders")
     }
+    @tailrec
     def createDirList(args: List[String], folders:List[String]):List[String] = {
       if (args == Nil || args.head.charAt(0) == '-') folders
       else createDirList(args.tail, args.head :: folders)
@@ -127,7 +149,7 @@ object worker {
     dirList.map(filesFromDir(_))
   }
 
-  def makeWorkerServer(promiseLists: List[List[Promise[DataSet]]]) = {
+  def makeWorkerServer(promiseLists: List[PromiseQueue[DataSet]]) = {
     val service = new WorkerServiceImpl(promiseLists)
     val serverBuilder = ServerBuilder.forPort(0)
     serverBuilder.addService(WorkerServiceGrpc.bindService(service, ExecutionContext.global))
@@ -142,27 +164,28 @@ object worker {
   }
 
   def getWorkerStub(clientInfo: ClientInfo)= {
-    val channelBuilder = ManagedChannelBuilder.forAddress(clientInfo.ip, clientInfo.port)
+    val channelBuilder = ManagedChannelBuilder.forAddress("localhost", clientInfo.port)
     channelBuilder.usePlaintext
     val channel = channelBuilder.build
     WorkerServiceGrpc.stub(channel)
   }
 
+  @tailrec
   def successPromiseList(promiseList:List[Promise[DataSet]], dataSet:DataSet):Unit = {
         assert(promiseList != Nil)
         if (!promiseList.head.trySuccess(dataSet)) successPromiseList( promiseList.tail, dataSet)
       }
 
-  class WorkerServiceImpl(promiseLists: List[List[Promise[DataSet]]]) extends  WorkerServiceGrpc.WorkerService {
+  class WorkerServiceImpl(promiseLists: List[PromiseQueue[DataSet]]) extends  WorkerServiceGrpc.WorkerService {
     override def sendData(request: DataPackage): Future[DataReply] = {
       assert(request.dataSets.size == promiseLists.size)
       giveDataToThreads(promiseLists,request.dataSets.toList)
       Future.successful(DataReply("Received"))
     }
 
-    def giveDataToThreads(promiseLists: List[List[Promise[DataSet]]], dataSets: List[DataSet]):Unit = {
+    def giveDataToThreads(promiseLists: List[PromiseQueue[DataSet]], dataSets: List[DataSet]):Unit = {
       if(promiseLists != Nil) {
-        successPromiseList(promiseLists.head, dataSets.head)
+        promiseLists.head.success(dataSets.head)
         giveDataToThreads(promiseLists.tail, dataSets.tail)
       }
     }
