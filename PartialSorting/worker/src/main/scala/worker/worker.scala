@@ -55,7 +55,7 @@ object worker {
     val combinedData = dataSets.foldRight(List[Data]())((dataset, combinedList)=>combinedList:::dataset.data.toList)
     val outFile = new File(outPutFile + "/partition" + "." + number)
     val bw = new BufferedWriter(new FileWriter(outFile))
-    combinedData.sortWith(dataLessThan).foreach(data => bw.write(data.key +" " + data.value + "\n"))
+    combinedData.sortWith(dataLessThan).foreach(data => bw.write(data.key +"\n"))
     bw.close()
   }
 
@@ -65,8 +65,8 @@ object worker {
   }
 
   def stringToData(str:String):Data = {
-    val dataWords = str.split(" ", 2)
-    Data(key = dataWords(0), value = dataWords(1))
+    //val dataWords = str.split(" ", 2)
+    Data(key = str)
   }
 
   def dataLessThan(d1:Data, d2:Data) = if (d1.key < d2.key) true else false
