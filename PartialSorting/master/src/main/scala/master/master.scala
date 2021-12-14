@@ -15,11 +15,11 @@ object master {
     val noOfClients = args(0).toInt
     val server = new MasterServer(noOfClients)
     server.start
+    println(server.getAddress())
     server.getAndSendNumberOfBlocks
     val clientInfoList = server.getClientInfo
     val noOfBlocks = clientInfoList.foldRight(0)((info, counter) => info.partitions + counter)
     val keyRanges = makeMachineKeyRanges(clientInfoList, noOfBlocks, KeyRangeList(), 0)
-    print(keyRanges)
     server.sendKeyRanges(keyRanges)
     clientInfoList.foreach(clientInfo => print(clientInfo.ip + " " + "\n"))
     server.server.shutdown

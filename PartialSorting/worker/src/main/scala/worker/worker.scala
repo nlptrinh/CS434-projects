@@ -32,7 +32,9 @@ object worker {
     val keyRanges = masterBlockingStub.introduction(clientInfo)
 
     startThreads(inputBlocks.flatten, keyRanges, receivedDataQueues, 0, outputDir)
-    workerServer.awaitTermination()
+    receivedDataQueues.foreach (x=> x.waitForQueue)
+    workerServer.shutdown
+    workerServer.awaitTermination
   }
 
   @tailrec
